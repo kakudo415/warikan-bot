@@ -117,6 +117,7 @@ func (h *SlackEventHandler) HandleAppMentionEvent(event *slackevents.AppMentionE
 		log.Println("ERROR: Failed to create Yen value object:", err)
 		return err
 	}
+
 	eventID, err := h.slackMapper.SlackChannelIDToEventID(event.Channel)
 	if err != nil {
 		log.Println("ERROR: Failed to get event ID from Slack channel ID:", err)
@@ -127,11 +128,13 @@ func (h *SlackEventHandler) HandleAppMentionEvent(event *slackevents.AppMentionE
 		log.Println("ERROR: Failed to get payer ID from Slack user ID:", err)
 		return err
 	}
+
 	payment, err := h.paymentUsecase.Create(eventID, payerID, amountYen)
 	if err != nil {
 		log.Println("ERROR: Failed to create payment:", err)
 		return err
 	}
+
 	if eventID == valueobject.EventIDUnknown {
 		err := h.slackMapper.CreateEventIDSlackChannelIDMapping(payment.EventID, event.Channel)
 		if err != nil {
@@ -148,8 +151,9 @@ func (h *SlackEventHandler) HandleAppMentionEvent(event *slackevents.AppMentionE
 	if err != nil {
 		log.Println("ERROR: Failed to create payment ID to Slack thread timestamp mapping:", err)
 	}
+
 	_, _, err = h.client.PostMessage(event.Channel, slack.MsgOptionText(
-		"<@"+event.User+">さんの立替払い"+strconv.Itoa(int(payment.Amount.Uint64()))+"円を記録しました！",
+		"<@"+event.User+">さんの立替払い"+payment.Amount.String()+"を記録しました！",
 		false),
 		slack.MsgOptionTS(event.TimeStamp),
 	)
@@ -157,5 +161,6 @@ func (h *SlackEventHandler) HandleAppMentionEvent(event *slackevents.AppMentionE
 		log.Println("ERROR: Failed to post message to Slack:", err)
 		return err
 	}
+
 	return nil
 }

@@ -4,6 +4,9 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
+	"golang.org/x/text/number"
 )
 
 type (
@@ -79,4 +82,9 @@ func NewYen(amount int) (Yen, error) {
 
 func (y Yen) Uint64() uint64 {
 	return y.amount
+}
+
+func (y Yen) String() string {
+	p := message.NewPrinter(language.Japanese)
+	return p.Sprintf("%d円", number.Decimal(y.amount))
 }

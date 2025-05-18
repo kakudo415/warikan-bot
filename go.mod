@@ -7,4 +7,5 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/mattn/go-sqlite3 v1.14.28 // indirect
 	github.com/slack-go/slack v0.16.0 // indirect
+	golang.org/x/text v0.25.0 // indirect
 )
