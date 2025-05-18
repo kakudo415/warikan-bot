@@ -5,20 +5,33 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
+
+	"github.com/kakudo415/warikan-bot/internal/domain/valueobject"
+	"github.com/kakudo415/warikan-bot/internal/infrastructure/mapper"
+	"github.com/kakudo415/warikan-bot/internal/usecase"
 )
 
 type SlackEventHandler struct {
-	client        *slack.Client
-	signingSecret string
+	client         *slack.Client
+	signingSecret  string
+	paymentUsecase *usecase.PaymentUsecase
+	slackMapper    *mapper.SlackMapper
+	amountPattern  *regexp.Regexp
 }
 
-func NewSlackEventHandler(token string, signingSecret string) *SlackEventHandler {
+func NewSlackEventHandler(token string, signingSecret string, paymentUsecase *usecase.PaymentUsecase, slackMapper *mapper.SlackMapper) *SlackEventHandler {
 	return &SlackEventHandler{
-		client:        slack.New(token),
-		signingSecret: signingSecret,
+		client:         slack.New(token),
+		signingSecret:  signingSecret,
+		paymentUsecase: paymentUsecase,
+		slackMapper:    slackMapper,
+		amountPattern:  regexp.MustCompile(`\b((?:\d{1,3}(?:,\d{3})+|\d+))円?\b`),
 	}
 }
 
@@ -80,14 +93,69 @@ func (h *SlackEventHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *SlackEventHandler) HandleCallbackEvent(event slackevents.EventsAPIEvent) error {
 	switch e := event.InnerEvent.Data.(type) {
 	case *slackevents.AppMentionEvent:
-		h.client.PostMessage(e.Channel, slack.MsgOptionBlocks(
-			slack.NewHeaderBlock(slack.NewTextBlockObject(slack.PlainTextType, "割り勘 :thread:", true, false)),
-			slack.NewSectionBlock(
-				slack.NewTextBlockObject(slack.PlainTextType, "割り勘の計算を開始します。支払った金額を返信してください。", false, false),
-				nil,
-				nil,
-			),
-		))
+		return h.HandleAppMentionEvent(e)
+	default:
+		log.Println("ERROR : Unsupported event type:", e)
+	}
+	return nil
+}
+
+func (h *SlackEventHandler) HandleAppMentionEvent(event *slackevents.AppMentionEvent) error {
+	match := h.amountPattern.FindStringSubmatch(event.Text)
+	if match == nil {
+		log.Println("INFO: No amount found")
+		return nil
+	}
+	rawAmount := strings.ReplaceAll(match[1], ",", "")
+	amount, err := strconv.Atoi(rawAmount)
+	if err != nil {
+		log.Println("ERROR: Failed to convert amount to integer:", err)
+		return err
+	}
+	amountYen, err := valueobject.NewYen(amount)
+	if err != nil {
+		log.Println("ERROR: Failed to create Yen value object:", err)
+		return err
+	}
+	eventID, err := h.slackMapper.SlackChannelIDToEventID(event.Channel)
+	if err != nil {
+		log.Println("ERROR: Failed to get event ID from Slack channel ID:", err)
+		return err
+	}
+	payerID, err := h.slackMapper.SlackUserIDToPayerID(event.User)
+	if err != nil {
+		log.Println("ERROR: Failed to get payer ID from Slack user ID:", err)
+		return err
+	}
+	payment, err := h.paymentUsecase.Create(eventID, payerID, amountYen)
+	if err != nil {
+		log.Println("ERROR: Failed to create payment:", err)
+		return err
+	}
+	if eventID == valueobject.EventIDUnknown {
+		err := h.slackMapper.CreateEventIDSlackChannelIDMapping(payment.EventID, event.Channel)
+		if err != nil {
+			log.Println("ERROR: Failed to create event ID to Slack channel ID mapping:", err)
+		}
+	}
+	if payerID == valueobject.PayerIDUnknown {
+		err := h.slackMapper.CreatePayerIDSlackUserIDMapping(payment.PayerID, event.User)
+		if err != nil {
+			log.Println("ERROR: Failed to create payer ID to Slack user ID mapping:", err)
+		}
+	}
+	err = h.slackMapper.CreatePaymentIDSlackThreadTSMapping(payment.ID, event.TimeStamp)
+	if err != nil {
+		log.Println("ERROR: Failed to create payment ID to Slack thread timestamp mapping:", err)
+	}
+	_, _, err = h.client.PostMessage(event.Channel, slack.MsgOptionText(
+		"<@"+event.User+">さんの立替払い"+strconv.Itoa(int(payment.Amount.Uint64()))+"円を記録しました！",
+		false),
+		slack.MsgOptionTS(event.TimeStamp),
+	)
+	if err != nil {
+		log.Println("ERROR: Failed to post message to Slack:", err)
+		return err
 	}
 	return nil
 }
