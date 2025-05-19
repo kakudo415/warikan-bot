@@ -65,13 +65,7 @@ func (r *PayerRepository) FindByEventID(eventID valueobject.EventID) ([]*entity.
 			return nil, err
 		}
 		payer.ID = valueobject.NewPayerID(rawID)
-		if err != nil {
-			return nil, err
-		}
 		payer.EventID = valueobject.NewEventID(rawEventID)
-		if err != nil {
-			return nil, err
-		}
 		payers = append(payers, &payer)
 	}
 	return payers, nil
