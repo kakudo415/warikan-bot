@@ -8,20 +8,9 @@ type Event struct {
 	ID valueobject.EventID
 }
 
-func NewEvent() *Event {
-	return &Event{
-		ID: valueobject.NewEventID(),
-	}
-}
-
 type Payer struct {
-	ID valueobject.PayerID
-}
-
-func NewPayer() *Payer {
-	return &Payer{
-		ID: valueobject.NewPayerID(),
-	}
+	ID      valueobject.PayerID
+	EventID valueobject.EventID
 }
 
 type Payment struct {
@@ -29,13 +18,4 @@ type Payment struct {
 	EventID valueobject.EventID
 	PayerID valueobject.PayerID
 	Amount  valueobject.Yen
-}
-
-func NewPayment(eventID valueobject.EventID, payerID valueobject.PayerID, amount valueobject.Yen) *Payment {
-	return &Payment{
-		ID:      valueobject.NewPaymentID(),
-		EventID: eventID,
-		PayerID: payerID,
-		Amount:  amount,
-	}
 }

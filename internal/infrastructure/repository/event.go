@@ -32,9 +32,9 @@ func NewEventRepository(filename string) (*EventRepository, error) {
 	}, nil
 }
 
-func (r *EventRepository) CreateEvent(e *entity.Event) error {
-	_, err := r.db.Exec("INSERT INTO events (id) VALUES (?)",
-		e.ID.String(),
+func (r *EventRepository) CreateIfNotExists(event *entity.Event) error {
+	_, err := r.db.Exec("INSERT INTO events (id) VALUES (?) ON CONFLICT IGNORE",
+		event.ID.String(),
 	)
 	return err
 }

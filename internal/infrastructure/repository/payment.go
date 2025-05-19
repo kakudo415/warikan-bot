@@ -6,6 +6,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/kakudo415/warikan-bot/internal/domain/entity"
+	"github.com/kakudo415/warikan-bot/internal/domain/valueobject"
 )
 
 type PaymentRepository struct {
@@ -35,12 +36,41 @@ func NewPaymentRepository(filename string) (*EventRepository, error) {
 	}, nil
 }
 
-func (r *EventRepository) CreatePayment(p *entity.Payment) error {
+func (r *EventRepository) CreatePayment(payment *entity.Payment) error {
 	_, err := r.db.Exec("INSERT INTO payments (id, event_id, payer_id, amount) VALUES (?, ?, ?, ?)",
-		p.ID.String(),
-		p.EventID.String(),
-		p.PayerID.String(),
-		p.Amount.Uint64(),
+		payment.ID.String(),
+		payment.EventID.String(),
+		payment.PayerID.String(),
+		payment.Amount.Uint64(),
 	)
 	return err
+}
+
+func (r *EventRepository) FindByEventID(eventID valueobject.EventID) ([]*entity.Payment, error) {
+	rows, err := r.db.Query("SELECT id, event_id, payer_id, amount FROM payments WHERE event_id = ?", eventID.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []*entity.Payment
+	for rows.Next() {
+		var rawID, rawEventID, rawPayerID string
+		var rawAmount int
+		var payment entity.Payment
+		err := rows.Scan(&rawID, &rawEventID, &rawPayerID, &rawAmount)
+		if err != nil {
+			return nil, err
+		}
+		payment.ID = valueobject.NewPaymentID(rawID)
+		payment.EventID = valueobject.NewEventID(rawEventID)
+		payment.PayerID = valueobject.NewPayerID(rawPayerID)
+		payment.Amount, err = valueobject.NewYen(rawAmount)
+		if err != nil {
+			return nil, err
+		}
+		payments = append(payments, &payment)
+	}
+
+	return payments, nil
 }

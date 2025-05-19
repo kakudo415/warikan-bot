@@ -3,88 +3,67 @@ package valueobject
 import (
 	"errors"
 
-	"github.com/google/uuid"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 	"golang.org/x/text/number"
 )
 
 type (
-	EventID   uuid.UUID
-	PayerID   uuid.UUID
-	PaymentID uuid.UUID
+	EventID   struct{ value string }
+	PayerID   struct{ value string }
+	PaymentID struct{ value string }
 )
 
-var (
-	EventIDUnknown   = EventID(uuid.Nil)
-	PayerIDUnknown   = PayerID(uuid.Nil)
-	PaymentIDUnknown = PaymentID(uuid.Nil)
-)
-
-func NewEventID() EventID {
-	return EventID(uuid.New())
+func NewEventID(value string) EventID {
+	return EventID{value: value}
 }
 
 func (e EventID) String() string {
-	return uuid.UUID(e).String()
+	return e.value
 }
 
-func EventIDFromString(id string) (EventID, error) {
-	uuid, err := uuid.Parse(id)
-	if err != nil {
-		return EventIDUnknown, err
-	}
-	return EventID(uuid), nil
+func (e EventID) IsUnknown() bool {
+	return e.value == ""
 }
 
-func NewPayerID() PayerID {
-	return PayerID(uuid.New())
+func NewPayerID(value string) PayerID {
+	return PayerID{value: value}
 }
 
 func (p PayerID) String() string {
-	return uuid.UUID(p).String()
+	return p.value
 }
 
-func PayerIDFromString(id string) (PayerID, error) {
-	uuid, err := uuid.Parse(id)
-	if err != nil {
-		return PayerIDUnknown, err
-	}
-	return PayerID(uuid), nil
+func (p PayerID) IsUnknown() bool {
+	return p.value == ""
 }
 
-func NewPaymentID() PaymentID {
-	return PaymentID(uuid.New())
+func NewPaymentID(value string) PaymentID {
+	return PaymentID{value: value}
 }
 
 func (p PaymentID) String() string {
-	return uuid.UUID(p).String()
+	return p.value
 }
 
-func PaymentIDFromString(id string) (PaymentID, error) {
-	uuid, err := uuid.Parse(id)
-	if err != nil {
-		return PaymentIDUnknown, err
-	}
-	return PaymentID(uuid), nil
+func (p PaymentID) IsUnknown() bool {
+	return p.value == ""
 }
 
-type Yen struct {
-	amount uint64
-}
+type Yen uint64
 
 func NewYen(amount int) (Yen, error) {
 	if amount < 0 {
-		return Yen{}, errors.New("amount cannot be negative")
+		return 0, errors.New("amount cannot be negative")
 	}
-	return Yen{uint64(amount)}, nil
+	return Yen(uint64(amount)), nil
 }
 
 func (y Yen) Uint64() uint64 {
-	return y.amount
+	return uint64(y)
 }
 
 func (y Yen) String() string {
 	p := message.NewPrinter(language.Japanese)
-	return p.Sprintf("%d円", number.Decimal(y.amount))
+	return p.Sprintf("%d円", number.Decimal(y.Uint64()))
 }
