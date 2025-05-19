@@ -43,7 +43,7 @@ func (r *PayerRepository) Create(payer *entity.Payer) error {
 }
 
 func (r *PayerRepository) CreateIfNotExists(payer *entity.Payer) error {
-	_, err := r.db.Exec("INSERT INTO payers (id, event_id) VALUES (?, ?) ON CONFLICT IGNORE",
+	_, err := r.db.Exec("INSERT OR IGNORE INTO payers (id, event_id) VALUES (?, ?)",
 		payer.ID.String(),
 		payer.EventID.String(),
 	)

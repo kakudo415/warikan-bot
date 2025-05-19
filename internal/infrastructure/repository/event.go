@@ -33,7 +33,7 @@ func NewEventRepository(filename string) (*EventRepository, error) {
 }
 
 func (r *EventRepository) CreateIfNotExists(event *entity.Event) error {
-	_, err := r.db.Exec("INSERT INTO events (id) VALUES (?) ON CONFLICT IGNORE",
+	_, err := r.db.Exec("INSERT OR IGNORE INTO events (id) VALUES (?)",
 		event.ID.String(),
 	)
 	return err

@@ -16,6 +16,7 @@ type PayerRepository interface {
 }
 
 type PaymentRepository interface {
-	CreatePayment(payment *entity.Payment) error
+	Create(payment *entity.Payment) error
+	Delete(paymentID valueobject.PaymentID) error
 	FindByEventID(eventID valueobject.EventID) ([]*entity.Payment, error)
 }

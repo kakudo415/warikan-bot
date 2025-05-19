@@ -17,8 +17,8 @@ import (
 )
 
 type SlackCommandHandler struct {
-	client         *slack.Client
 	signingSecret  string
+	client         *slack.Client
 	paymentUsecase *usecase.PaymentUsecase
 	amountPattern  *regexp.Regexp
 }
@@ -33,7 +33,6 @@ func NewSlackCommandHandler(token string, signingSecret string, paymentUsecase *
 }
 
 func (h *SlackCommandHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Println("!!!")
 	verifier, err := slack.NewSecretsVerifier(r.Header, h.signingSecret)
 	if err != nil {
 		log.Println("ERROR: Failed to create secrets verifier: ", err)
@@ -72,8 +71,8 @@ func (h *SlackCommandHandler) HandleSlashCommand(slash slack.SlashCommand) error
 }
 
 func (h *SlackCommandHandler) HandleWarikanCommand(slash slack.SlashCommand) error {
-	// eventID := valueobject.NewEventID(slash.ChannelID)
-	// payerID := valueobject.NewPayerID(slash.UserID)
+	eventID := valueobject.NewEventID(slash.ChannelID)
+	payerID := valueobject.NewPayerID(slash.UserID)
 
 	match := h.amountPattern.FindStringSubmatch(slash.Text)
 	if match != nil {
@@ -89,21 +88,28 @@ func (h *SlackCommandHandler) HandleWarikanCommand(slash slack.SlashCommand) err
 			return err
 		}
 
-		// payment, err := h.paymentUsecase.Create(eventID, payerID, paymentID, amountYen)
-		// if err != nil {
-		// 	log.Println("ERROR: Failed to create payment: ", err)
-		// 	return err
-		// }
+		payment, err := h.paymentUsecase.Create(eventID, payerID, amountYen)
+		if err != nil {
+			log.Println("ERROR: Failed to create payment: ", err)
+			return err
+		}
 
-		h.client.PostMessage(slash.ChannelID, slack.MsgOptionBlocks(
+		_, _, err = h.client.PostMessage(slash.ChannelID, slack.MsgOptionBlocks(
 			slack.NewSectionBlock(
-				slack.NewTextBlockObject("plain_text", "<@"+slash.UserID+">さんの立替払い"+amountYen.String()+"を記録しました！", false, false),
+				slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s>さんが%s立て替えました！", slash.UserID, amountYen.String()), false, false),
 				nil,
-				slack.NewAccessory(
-					slack.NewButtonBlockElement("hoge", "fuga", slack.NewTextBlockObject("plain_text", "OK", false, false)),
-				),
+				nil,
 			),
-		))
+		), slack.MsgOptionMetadata(slack.SlackMetadata{
+			EventType: "warikan",
+			EventPayload: map[string]any{
+				"payment_id": payment.ID.String(),
+			},
+		}))
+		if err != nil {
+			log.Println("ERROR: Failed to post message: ", err)
+			return err
+		}
 
 		return nil
 	}

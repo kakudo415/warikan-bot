@@ -25,9 +25,11 @@ func main() {
 	}
 	paymentUsecase := usecase.NewPayment(eventRepository, payerRepository, paymentRepository)
 	slackCommandHandler := handler.NewSlackCommandHandler(os.Getenv("SLACK_BOT_TOKEN"), os.Getenv("SLACK_SIGNING_SECRET"), paymentUsecase)
+	slackEventHandler := handler.NewSlackEventHandler(os.Getenv("SLACK_BOT_TOKEN"), os.Getenv("SLACK_SIGNING_SECRET"), paymentUsecase)
 
 	mux := http.NewServeMux()
 	mux.Handle("/slack/command", slackCommandHandler)
+	mux.Handle("/slack/event", slackEventHandler)
 	log.Println("Starting server on 0.0.0.0:5272")
 	http.ListenAndServe("0.0.0.0:5272", mux) // U+5272 = 割
 }

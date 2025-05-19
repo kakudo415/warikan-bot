@@ -36,13 +36,18 @@ func NewPaymentRepository(filename string) (*EventRepository, error) {
 	}, nil
 }
 
-func (r *EventRepository) CreatePayment(payment *entity.Payment) error {
+func (r *EventRepository) Create(payment *entity.Payment) error {
 	_, err := r.db.Exec("INSERT INTO payments (id, event_id, payer_id, amount) VALUES (?, ?, ?, ?)",
 		payment.ID.String(),
 		payment.EventID.String(),
 		payment.PayerID.String(),
 		payment.Amount.Uint64(),
 	)
+	return err
+}
+
+func (r *EventRepository) Delete(paymentID valueobject.PaymentID) error {
+	_, err := r.db.Exec("DELETE FROM payments WHERE id = ?", paymentID.String())
 	return err
 }
 
@@ -62,7 +67,10 @@ func (r *EventRepository) FindByEventID(eventID valueobject.EventID) ([]*entity.
 		if err != nil {
 			return nil, err
 		}
-		payment.ID = valueobject.NewPaymentID(rawID)
+		payment.ID, err = valueobject.NewPaymentIDFromString(rawID)
+		if err != nil {
+			return nil, err
+		}
 		payment.EventID = valueobject.NewEventID(rawEventID)
 		payment.PayerID = valueobject.NewPayerID(rawPayerID)
 		payment.Amount, err = valueobject.NewYen(rawAmount)

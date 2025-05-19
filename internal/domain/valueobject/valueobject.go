@@ -3,6 +3,7 @@ package valueobject
 import (
 	"errors"
 
+	"github.com/google/uuid"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 	"golang.org/x/text/number"
@@ -11,7 +12,7 @@ import (
 type (
 	EventID   struct{ value string }
 	PayerID   struct{ value string }
-	PaymentID struct{ value string }
+	PaymentID struct{ value uuid.UUID }
 )
 
 func NewEventID(value string) EventID {
@@ -38,16 +39,20 @@ func (p PayerID) IsUnknown() bool {
 	return p.value == ""
 }
 
-func NewPaymentID(value string) PaymentID {
-	return PaymentID{value: value}
+func NewPaymentID() PaymentID {
+	return PaymentID{value: uuid.New()}
+}
+
+func NewPaymentIDFromString(value string) (PaymentID, error) {
+	id, err := uuid.Parse(value)
+	if err != nil {
+		return PaymentID{}, err
+	}
+	return PaymentID{value: id}, nil
 }
 
 func (p PaymentID) String() string {
-	return p.value
-}
-
-func (p PaymentID) IsUnknown() bool {
-	return p.value == ""
+	return p.value.String()
 }
 
 type Yen uint64

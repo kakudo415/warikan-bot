@@ -34,7 +34,7 @@ type SettlementInstruction struct {
 	Amount valueobject.Yen
 }
 
-func (u *PaymentUsecase) Create(eventID valueobject.EventID, payerID valueobject.PayerID, paymentID valueobject.PaymentID, amount valueobject.Yen) (*entity.Payment, error) {
+func (u *PaymentUsecase) Create(eventID valueobject.EventID, payerID valueobject.PayerID, amount valueobject.Yen) (*entity.Payment, error) {
 	if eventID.IsUnknown() {
 		fmt.Println("ERROR: eventID is unknown")
 		return nil, errors.New("eventID is unknown")
@@ -42,7 +42,10 @@ func (u *PaymentUsecase) Create(eventID valueobject.EventID, payerID valueobject
 	event := &entity.Event{
 		ID: eventID,
 	}
-	u.events.CreateIfNotExists(event)
+	if err := u.events.CreateIfNotExists(event); err != nil {
+		fmt.Println("ERROR: Failed to create event:", err)
+		return nil, err
+	}
 
 	if payerID.IsUnknown() {
 		fmt.Println("ERROR: payerID is unknown")
@@ -52,25 +55,31 @@ func (u *PaymentUsecase) Create(eventID valueobject.EventID, payerID valueobject
 		ID:      payerID,
 		EventID: eventID,
 	}
-	u.payers.CreateIfNotExists(payer)
-
-	if paymentID.IsUnknown() {
-		fmt.Println("ERROR: paymentID is unknown")
-		return nil, errors.New("paymentID is unknown")
+	if err := u.payers.CreateIfNotExists(payer); err != nil {
+		fmt.Println("ERROR: Failed to create payer:", err)
+		return nil, err
 	}
+
 	payment := &entity.Payment{
-		ID:      paymentID,
+		ID:      valueobject.NewPaymentID(),
 		EventID: eventID,
 		PayerID: payerID,
 		Amount:  amount,
 	}
-	err := u.payments.CreatePayment(payment)
-	if err != nil {
+	if err := u.payments.Create(payment); err != nil {
 		fmt.Println("ERROR: Failed to create payment:", err)
 		return nil, err
 	}
 
 	return payment, nil
+}
+
+func (u *PaymentUsecase) Delete(paymentID valueobject.PaymentID) error {
+	if err := u.payments.Delete(paymentID); err != nil {
+		fmt.Println("ERROR: Failed to delete payment:", err)
+		return err
+	}
+	return nil
 }
 
 func (u *PaymentUsecase) Join(eventID valueobject.EventID, payerID valueobject.PayerID) (*entity.Payer, error) {
