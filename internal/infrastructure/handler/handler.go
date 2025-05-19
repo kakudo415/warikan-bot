@@ -1,7 +1,8 @@
 package handler
 
 import (
-	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -10,21 +11,20 @@ import (
 	"strings"
 
 	"github.com/slack-go/slack"
-	"github.com/slack-go/slack/slackevents"
 
 	"github.com/kakudo415/warikan-bot/internal/domain/valueobject"
 	"github.com/kakudo415/warikan-bot/internal/usecase"
 )
 
-type SlackEventHandler struct {
+type SlackCommandHandler struct {
 	client         *slack.Client
 	signingSecret  string
 	paymentUsecase *usecase.PaymentUsecase
 	amountPattern  *regexp.Regexp
 }
 
-func NewSlackEventHandler(token string, signingSecret string, paymentUsecase *usecase.PaymentUsecase) *SlackEventHandler {
-	return &SlackEventHandler{
+func NewSlackCommandHandler(token string, signingSecret string, paymentUsecase *usecase.PaymentUsecase) *SlackCommandHandler {
+	return &SlackCommandHandler{
 		client:         slack.New(token),
 		signingSecret:  signingSecret,
 		paymentUsecase: paymentUsecase,
@@ -32,120 +32,81 @@ func NewSlackEventHandler(token string, signingSecret string, paymentUsecase *us
 	}
 }
 
-func (h *SlackEventHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
-		log.Println("ERROR: Failed to read request body:", err)
-		return
-	}
-
+func (h *SlackCommandHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Println("!!!")
 	verifier, err := slack.NewSecretsVerifier(r.Header, h.signingSecret)
 	if err != nil {
+		log.Println("ERROR: Failed to create secrets verifier: ", err)
 		http.Error(w, "Failed to create secrets verifier", http.StatusBadRequest)
-		log.Println("ERROR: Failed to create secrets verifier:", err)
 		return
 	}
-	if _, err := verifier.Write(body); err != nil {
-		http.Error(w, "Failed to write to secrets verifier", http.StatusInternalServerError)
-		log.Println("ERROR: Failed to write to secrets verifier:", err)
-		return
-	}
-	if err := verifier.Ensure(); err != nil {
-		http.Error(w, "Invalid request signature", http.StatusUnauthorized)
-		log.Println("ERROR: Invalid request signature:", err)
-		return
-	}
-
-	event, err := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionNoVerifyToken())
+	r.Body = io.NopCloser(io.TeeReader(r.Body, &verifier))
+	slash, err := slack.SlashCommandParse(r)
 	if err != nil {
-		http.Error(w, "Failed to parse Slack event", http.StatusBadRequest)
-		log.Println("ERROR: Failed to parse Slack event:", err)
+		log.Println("ERROR: Failed to parse slash command: ", err)
+		http.Error(w, "Failed to parse slash command", http.StatusBadRequest)
 		return
 	}
-	switch event.Type {
-	case slackevents.URLVerification:
-		var response *slackevents.ChallengeResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			http.Error(w, "Failed to unmarshal URL verification event", http.StatusBadRequest)
-			log.Println("ERROR: Failed to unmarshal URL verification event:", err)
-			return
-		}
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(response.Challenge))
-	case slackevents.CallbackEvent:
-		if err := h.HandleCallbackEvent(event); err != nil {
-			http.Error(w, "Failed to handle callback event", http.StatusInternalServerError)
-			log.Println("ERROR: Failed to handle callback event:", err)
-			return
-		}
-	default:
-		http.Error(w, "Unsupported event type", http.StatusBadRequest)
-		log.Println("ERROR: Unsupported event type:", event.Type)
+	if verifier.Ensure() != nil {
+		log.Println("ERROR: Invalid request signature: ", err)
+		http.Error(w, "Invalid request signature", http.StatusUnauthorized)
+		return
+	}
+
+	err = h.HandleSlashCommand(slash)
+	if err != nil {
+		log.Println("ERROR: Failed to handle slash command: ", err)
+		http.Error(w, "Failed to handle slash command", http.StatusInternalServerError)
 		return
 	}
 }
 
-func (h *SlackEventHandler) HandleCallbackEvent(event slackevents.EventsAPIEvent) error {
-	switch e := event.InnerEvent.Data.(type) {
-	case *slackevents.AppMentionEvent:
-		return h.HandleAppMentionEvent(e)
+func (h *SlackCommandHandler) HandleSlashCommand(slash slack.SlashCommand) error {
+	switch slash.Command {
+	case "/warikan":
+		return h.HandleWarikanCommand(slash)
 	default:
-		log.Println("ERROR : Unsupported event type:", e)
+		log.Println("ERROR: Unsupported command: ", slash.Command)
+		return fmt.Errorf("unsupported command: %s", slash.Command)
 	}
-	return nil
 }
 
-func (h *SlackEventHandler) HandleAppMentionEvent(event *slackevents.AppMentionEvent) error {
-	eventID := valueobject.NewEventID(event.Channel)
-	payerID := valueobject.NewPayerID(event.User)
-	paymentID := valueobject.NewPaymentID(event.TimeStamp)
+func (h *SlackCommandHandler) HandleWarikanCommand(slash slack.SlashCommand) error {
+	// eventID := valueobject.NewEventID(slash.ChannelID)
+	// payerID := valueobject.NewPayerID(slash.UserID)
 
-	match := h.amountPattern.FindStringSubmatch(event.Text)
-	if match == nil {
-		_, err := h.paymentUsecase.Join(eventID, payerID)
-		if err != nil {
-			log.Println("ERROR: Failed to join event:", err)
-			return err
-		}
-		_, _, err = h.client.PostMessage(event.Channel, slack.MsgOptionText(
-			"<@"+event.User+">さんが割り勘に参加しました！",
-			false),
-			slack.MsgOptionTS(event.TimeStamp),
-		)
-		if err != nil {
-			log.Println("ERROR: Failed to post message to Slack:", err)
-			return err
-		}
-	} else {
+	match := h.amountPattern.FindStringSubmatch(slash.Text)
+	if match != nil {
 		rawAmount := strings.ReplaceAll(match[1], ",", "")
 		amount, err := strconv.Atoi(rawAmount)
 		if err != nil {
-			log.Println("ERROR: Failed to convert amount to integer:", err)
+			log.Println("ERROR: Failed to convert amount to integer: ", err)
 			return err
 		}
 		amountYen, err := valueobject.NewYen(amount)
 		if err != nil {
-			log.Println("ERROR: Failed to create Yen value object:", err)
+			log.Println("ERROR: Failed to create Yen value object: ", err)
 			return err
 		}
 
-		payment, err := h.paymentUsecase.Create(eventID, payerID, paymentID, amountYen)
-		if err != nil {
-			log.Println("ERROR: Failed to create payment:", err)
-			return err
-		}
-		_, _, err = h.client.PostMessage(event.Channel, slack.MsgOptionText(
-			"<@"+event.User+">さんの立替払い"+payment.Amount.String()+"を記録しました！",
-			false),
-			slack.MsgOptionTS(event.TimeStamp),
-		)
-		if err != nil {
-			log.Println("ERROR: Failed to post message to Slack:", err)
-			return err
-		}
+		// payment, err := h.paymentUsecase.Create(eventID, payerID, paymentID, amountYen)
+		// if err != nil {
+		// 	log.Println("ERROR: Failed to create payment: ", err)
+		// 	return err
+		// }
+
+		h.client.PostMessage(slash.ChannelID, slack.MsgOptionBlocks(
+			slack.NewSectionBlock(
+				slack.NewTextBlockObject("plain_text", "<@"+slash.UserID+">さんの立替払い"+amountYen.String()+"を記録しました！", false, false),
+				nil,
+				slack.NewAccessory(
+					slack.NewButtonBlockElement("hoge", "fuga", slack.NewTextBlockObject("plain_text", "OK", false, false)),
+				),
+			),
+		))
+
+		return nil
 	}
 
-	return nil
+	return errors.New("Invalid argument")
 }

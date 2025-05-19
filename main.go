@@ -24,10 +24,10 @@ func main() {
 		log.Fatalf("failed to create payment repository: %v", err)
 	}
 	paymentUsecase := usecase.NewPayment(eventRepository, payerRepository, paymentRepository)
-	slackEventHandler := handler.NewSlackEventHandler(os.Getenv("SLACK_BOT_TOKEN"), os.Getenv("SLACK_SIGNING_SECRET"), paymentUsecase)
+	slackCommandHandler := handler.NewSlackCommandHandler(os.Getenv("SLACK_BOT_TOKEN"), os.Getenv("SLACK_SIGNING_SECRET"), paymentUsecase)
 
 	mux := http.NewServeMux()
-	mux.Handle("/slack/events", slackEventHandler)
+	mux.Handle("/slack/command", slackCommandHandler)
 	log.Println("Starting server on 0.0.0.0:5272")
 	http.ListenAndServe("0.0.0.0:5272", mux) // U+5272 = 割
 }
