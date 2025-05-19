@@ -21,6 +21,8 @@ type SlackCommandHandler struct {
 	client         *slack.Client
 	paymentUsecase *usecase.PaymentUsecase
 	amountPattern  *regexp.Regexp
+	joinPattern    *regexp.Regexp
+	helpPattern    *regexp.Regexp
 }
 
 func NewSlackCommandHandler(token string, signingSecret string, paymentUsecase *usecase.PaymentUsecase) *SlackCommandHandler {
@@ -29,6 +31,8 @@ func NewSlackCommandHandler(token string, signingSecret string, paymentUsecase *
 		signingSecret:  signingSecret,
 		paymentUsecase: paymentUsecase,
 		amountPattern:  regexp.MustCompile(`\b((?:\d{1,3}(?:,\d{3})+|\d+))円?\b`),
+		joinPattern:    regexp.MustCompile(`\b(?:(?i:join)|参加|払う|払います)\b`),
+		helpPattern:    regexp.MustCompile(`\b(?:(?i:help)|(?i:h)|ヘルプ|使い方)\b`),
 	}
 }
 
@@ -106,6 +110,70 @@ func (h *SlackCommandHandler) HandleWarikanCommand(slash slack.SlashCommand) err
 				"payment_id": payment.ID.String(),
 			},
 		}))
+		if err != nil {
+			log.Println("ERROR: Failed to post message: ", err)
+			return err
+		}
+
+		return nil
+	}
+
+	if h.joinPattern.MatchString(slash.Text) {
+		_, err := h.paymentUsecase.Join(eventID, payerID)
+		if err != nil {
+			log.Println("ERROR: Failed to join event: ", err)
+			return err
+		}
+
+		_, _, err = h.client.PostMessage(slash.ChannelID, slack.MsgOptionBlocks(
+			slack.NewSectionBlock(
+				slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s>さんが参加しました！", slash.UserID), false, false),
+				nil,
+				nil,
+			),
+		))
+		if err != nil {
+			log.Println("ERROR: Failed to post message: ", err)
+			return err
+		}
+
+		return nil
+	}
+
+	if h.helpPattern.MatchString(slash.Text) {
+		_, _, err := h.client.PostMessage(slash.ChannelID, slack.MsgOptionBlocks(
+			slack.NewSectionBlock(
+				slack.NewTextBlockObject("mrkdwn", "*Slackで割り勘の計算ができます* :tada:\n支払いの集計はチャンネルごとに行われるので、イベント用のチャンネルで使ってください！", false, false),
+				nil,
+				nil,
+			),
+			slack.NewDividerBlock(),
+			slack.NewSectionBlock(
+				slack.NewTextBlockObject("mrkdwn", ":moneybag: *立替え登録*", false, false),
+				[]*slack.TextBlockObject{
+					slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan 金額`", false, false),
+					slack.NewTextBlockObject("mrkdwn", "*取り消す*\n登録メッセージを削除してください", false, false),
+				},
+				nil,
+			),
+			slack.NewDividerBlock(),
+			slack.NewSectionBlock(
+				slack.NewTextBlockObject("mrkdwn", ":money_with_wings: *支払者登録*", false, false),
+				[]*slack.TextBlockObject{
+					slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan join`", false, false),
+					slack.NewTextBlockObject("mrkdwn", "*取り消す*\n登録メッセージを削除してください", false, false),
+				},
+				nil,
+			),
+			slack.NewDividerBlock(),
+			slack.NewSectionBlock(
+				slack.NewTextBlockObject("mrkdwn", ":beginner: *ヘルプ*", false, false),
+				[]*slack.TextBlockObject{
+					slack.NewTextBlockObject("mrkdwn", "*この使い方を表示する*\n`/warikan help`", false, false),
+				},
+				nil,
+			),
+		))
 		if err != nil {
 			log.Println("ERROR: Failed to post message: ", err)
 			return err
