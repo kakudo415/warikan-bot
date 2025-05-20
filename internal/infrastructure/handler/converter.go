@@ -111,7 +111,6 @@ func buildSettlementMessage(settlement *usecase.Settlement) slack.MsgOption {
 				),
 				nil,
 				nil,
-				nil,
 			),
 		)
 	}

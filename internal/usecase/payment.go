@@ -124,7 +124,6 @@ func (u *PaymentUsecase) Settle(eventID valueobject.EventID) (*Settlement, error
 
 	for i, payer := range payers {
 		settlement.PayerIDs[i] = payer.ID
-		settlement.PayerAmounts[payer.ID] = valueobject.Yen(0)
 	}
 
 	debts := make([]valueobject.Yen, len(payers))
