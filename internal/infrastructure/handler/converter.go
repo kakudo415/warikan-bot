@@ -68,7 +68,6 @@ func buildSettlementMessage(settlement *usecase.Settlement) slack.MsgOption {
 		slack.NewHeaderBlock(
 			slack.NewTextBlockObject("plain_text", ":moneybag: 集計結果", false, false),
 		),
-		slack.NewDividerBlock(),
 	}
 	payerAmountFields := []*slack.TextBlockObject{}
 	for payerID, amount := range settlement.PayerAmounts {
@@ -84,19 +83,19 @@ func buildSettlementMessage(settlement *usecase.Settlement) slack.MsgOption {
 	}
 	blocks = append(blocks,
 		slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("合計%sが立て替えられています :receipt:", settlement.Total.String()), false, false),
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf(":receipt: 合計%sが立て替えられています", settlement.Total.String()), false, false),
 			payerAmountFields,
 			nil,
 		),
 		slack.NewDividerBlock(),
 		slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("%d人で割り勘します :purse:", len(settlement.PayerIDs)), false, false),
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf(":purse: %d人で割り勘します", len(settlement.PayerIDs)), false, false),
 			payerFields,
 			nil,
 		),
 		slack.NewDividerBlock(),
 		slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", "次のように清算してください :bow:", false, false),
+			slack.NewTextBlockObject("mrkdwn", ":money_with_wings: 次のように清算してください", false, false),
 			nil,
 			nil,
 		),
