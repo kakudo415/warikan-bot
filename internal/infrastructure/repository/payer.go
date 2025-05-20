@@ -2,7 +2,9 @@ package repository
 
 import (
 	"database/sql"
+	"errors"
 
+	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/kakudo415/warikan-bot/internal/domain/entity"
@@ -39,6 +41,11 @@ func (r *PayerRepository) Create(payer *entity.Payer) error {
 		payer.ID.String(),
 		payer.EventID.String(),
 	)
+	if sqliteErr := new(sqlite3.Error); errors.As(err, sqliteErr) {
+		if sqliteErr.ExtendedCode == sqlite3.ErrConstraintPrimaryKey || sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+			return valueobject.NewErrorAlreadyExists("payer already exists", err)
+		}
+	}
 	return err
 }
 

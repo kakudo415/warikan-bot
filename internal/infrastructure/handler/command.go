@@ -4,17 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"regexp"
-	"strconv"
-	"strings"
 
 	"github.com/slack-go/slack"
 
 	"github.com/kakudo415/warikan-bot/internal/domain/valueobject"
 	"github.com/kakudo415/warikan-bot/internal/usecase"
 )
+
+const SlackMetadataEventType = "warikan"
 
 type SlackCommandHandler struct {
 	signingSecret  string
@@ -39,143 +38,86 @@ func NewSlackCommandHandler(token string, signingSecret string, paymentUsecase *
 func (h *SlackCommandHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	verifier, err := slack.NewSecretsVerifier(r.Header, h.signingSecret)
 	if err != nil {
-		log.Println("ERROR: Failed to create secrets verifier: ", err)
 		http.Error(w, "Failed to create secrets verifier", http.StatusBadRequest)
 		return
 	}
 	r.Body = io.NopCloser(io.TeeReader(r.Body, &verifier))
 	slash, err := slack.SlashCommandParse(r)
 	if err != nil {
-		log.Println("ERROR: Failed to parse slash command: ", err)
 		http.Error(w, "Failed to parse slash command", http.StatusBadRequest)
 		return
 	}
 	if verifier.Ensure() != nil {
-		log.Println("ERROR: Invalid request signature: ", err)
 		http.Error(w, "Invalid request signature", http.StatusUnauthorized)
 		return
 	}
 
-	err = h.HandleSlashCommand(slash)
-	if err != nil {
-		log.Println("ERROR: Failed to handle slash command: ", err)
-		http.Error(w, "Failed to handle slash command", http.StatusInternalServerError)
+	err = h.handleSlashCommand(slash)
+	if e := new(valueobject.ErrorNotFound); errors.As(err, &e) {
+		http.Error(w, e.Error(), http.StatusNotFound)
 		return
+	}
+	if e := new(valueobject.ErrorAlreadyExists); errors.As(err, &e) {
+		http.Error(w, e.Error(), http.StatusConflict)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Failed to handle slash command", http.StatusInternalServerError)
 	}
 }
 
-func (h *SlackCommandHandler) HandleSlashCommand(slash slack.SlashCommand) error {
+func (h *SlackCommandHandler) handleSlashCommand(slash slack.SlashCommand) error {
 	switch slash.Command {
 	case "/warikan":
-		return h.HandleWarikanCommand(slash)
+		return h.handleWarikanCommand(slash)
 	default:
-		log.Println("ERROR: Unsupported command: ", slash.Command)
 		return fmt.Errorf("unsupported command: %s", slash.Command)
 	}
 }
 
-func (h *SlackCommandHandler) HandleWarikanCommand(slash slack.SlashCommand) error {
+func (h *SlackCommandHandler) handleWarikanCommand(slash slack.SlashCommand) error {
 	eventID := valueobject.NewEventID(slash.ChannelID)
 	payerID := valueobject.NewPayerID(slash.UserID)
 
 	match := h.amountPattern.FindStringSubmatch(slash.Text)
 	if match != nil {
-		rawAmount := strings.ReplaceAll(match[1], ",", "")
-		amount, err := strconv.Atoi(rawAmount)
+		amount, err := parseYen(match[1])
 		if err != nil {
-			log.Println("ERROR: Failed to convert amount to integer: ", err)
-			return err
-		}
-		amountYen, err := valueobject.NewYen(amount)
-		if err != nil {
-			log.Println("ERROR: Failed to create Yen value object: ", err)
 			return err
 		}
 
-		payment, err := h.paymentUsecase.Create(eventID, payerID, amountYen)
+		payment, err := h.paymentUsecase.Create(eventID, payerID, amount)
 		if err != nil {
-			log.Println("ERROR: Failed to create payment: ", err)
 			return err
 		}
 
-		_, _, err = h.client.PostMessage(slash.ChannelID, slack.MsgOptionBlocks(
-			slack.NewSectionBlock(
-				slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s>さんが%s立て替えました！", slash.UserID, amountYen.String()), false, false),
-				nil,
-				nil,
-			),
-		), slack.MsgOptionMetadata(slack.SlackMetadata{
-			EventType: "warikan",
+		_, _, err = h.client.PostMessage(slash.ChannelID, buildPaymentCreatedMessage(slash.UserID, amount), slack.MsgOptionMetadata(slack.SlackMetadata{
+			EventType: SlackMetadataEventType,
 			EventPayload: map[string]any{
 				"payment_id": payment.ID.String(),
 			},
 		}))
-		if err != nil {
-			log.Println("ERROR: Failed to post message: ", err)
-			return err
-		}
 
-		return nil
+		return err
 	}
 
 	if h.joinPattern.MatchString(slash.Text) {
 		_, err := h.paymentUsecase.Join(eventID, payerID)
+		if e := new(valueobject.ErrorAlreadyExists); errors.As(err, &e) {
+			_, _, err = h.client.PostMessage(slash.ChannelID, buildPayerAlreadyJoinedMessage(slash.UserID))
+			return err
+		}
 		if err != nil {
-			log.Println("ERROR: Failed to join event: ", err)
 			return err
 		}
 
-		_, _, err = h.client.PostMessage(slash.ChannelID, slack.MsgOptionBlocks(
-			slack.NewSectionBlock(
-				slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s>さんが参加しました！", slash.UserID), false, false),
-				nil,
-				nil,
-			),
-		))
-		if err != nil {
-			log.Println("ERROR: Failed to post message: ", err)
-			return err
-		}
-
-		return nil
+		_, _, err = h.client.PostMessage(slash.ChannelID, buildPayerJoinedMessage(slash.UserID))
+		return err
 	}
 
 	if h.helpPattern.MatchString(slash.Text) {
-		_, _, err := h.client.PostMessage(slash.ChannelID, slack.MsgOptionBlocks(
-			slack.NewSectionBlock(
-				slack.NewTextBlockObject("mrkdwn", "*Slackで割り勘の計算ができます* :tada:\n支払いの集計はチャンネルごとに行われるので、イベント用のチャンネルで使ってください！", false, false),
-				nil,
-				nil,
-			),
-			slack.NewDividerBlock(),
-			slack.NewSectionBlock(
-				slack.NewTextBlockObject("mrkdwn", ":moneybag: *立替え登録*", false, false),
-				[]*slack.TextBlockObject{
-					slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan 金額`", false, false),
-					slack.NewTextBlockObject("mrkdwn", "*取り消す*\n登録メッセージを削除してください", false, false),
-				},
-				nil,
-			),
-			slack.NewDividerBlock(),
-			slack.NewSectionBlock(
-				slack.NewTextBlockObject("mrkdwn", ":money_with_wings: *支払者登録*", false, false),
-				[]*slack.TextBlockObject{
-					slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan join`", false, false),
-					slack.NewTextBlockObject("mrkdwn", "*取り消す*\n登録メッセージを削除してください", false, false),
-				},
-				nil,
-			),
-			slack.NewDividerBlock(),
-			slack.NewSectionBlock(
-				slack.NewTextBlockObject("mrkdwn", ":beginner: *ヘルプ*", false, false),
-				[]*slack.TextBlockObject{
-					slack.NewTextBlockObject("mrkdwn", "*この使い方を表示する*\n`/warikan help`", false, false),
-				},
-				nil,
-			),
-		))
+		_, _, err := h.client.PostMessage(slash.ChannelID, buildHelpMessage())
 		if err != nil {
-			log.Println("ERROR: Failed to post message: ", err)
 			return err
 		}
 

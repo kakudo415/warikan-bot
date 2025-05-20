@@ -1,7 +1,6 @@
 package usecase
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/kakudo415/warikan-bot/internal/domain/entity"
@@ -36,28 +35,24 @@ type SettlementInstruction struct {
 
 func (u *PaymentUsecase) Create(eventID valueobject.EventID, payerID valueobject.PayerID, amount valueobject.Yen) (*entity.Payment, error) {
 	if eventID.IsUnknown() {
-		fmt.Println("ERROR: eventID is unknown")
-		return nil, errors.New("eventID is unknown")
+		return nil, valueobject.NewErrorNotFound("eventID is unknown", nil)
 	}
 	event := &entity.Event{
 		ID: eventID,
 	}
 	if err := u.events.CreateIfNotExists(event); err != nil {
-		fmt.Println("ERROR: Failed to create event:", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to create event: %w", err)
 	}
 
 	if payerID.IsUnknown() {
-		fmt.Println("ERROR: payerID is unknown")
-		return nil, errors.New("payerID is unknown")
+		return nil, valueobject.NewErrorNotFound("payerID is unknown", nil)
 	}
 	payer := &entity.Payer{
 		ID:      payerID,
 		EventID: eventID,
 	}
 	if err := u.payers.CreateIfNotExists(payer); err != nil {
-		fmt.Println("ERROR: Failed to create payer:", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to create payer: %w", err)
 	}
 
 	payment := &entity.Payment{
@@ -67,8 +62,7 @@ func (u *PaymentUsecase) Create(eventID valueobject.EventID, payerID valueobject
 		Amount:  amount,
 	}
 	if err := u.payments.Create(payment); err != nil {
-		fmt.Println("ERROR: Failed to create payment:", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to create payment: %w", err)
 	}
 
 	return payment, nil
@@ -76,34 +70,31 @@ func (u *PaymentUsecase) Create(eventID valueobject.EventID, payerID valueobject
 
 func (u *PaymentUsecase) Delete(paymentID valueobject.PaymentID) error {
 	if err := u.payments.Delete(paymentID); err != nil {
-		fmt.Println("ERROR: Failed to delete payment:", err)
-		return err
+		return fmt.Errorf("failed to delete payment: %w", err)
 	}
 	return nil
 }
 
 func (u *PaymentUsecase) Join(eventID valueobject.EventID, payerID valueobject.PayerID) (*entity.Payer, error) {
 	if eventID.IsUnknown() {
-		fmt.Println("ERROR: eventID is unknown")
-		return nil, errors.New("eventID is unknown")
+		return nil, valueobject.NewErrorNotFound("eventID is unknown", nil)
 	}
 	event := &entity.Event{
 		ID: eventID,
 	}
-	u.events.CreateIfNotExists(event)
+	if err := u.events.CreateIfNotExists(event); err != nil {
+		return nil, fmt.Errorf("failed to create event: %w", err)
+	}
 
 	if payerID.IsUnknown() {
-		fmt.Println("ERROR: payerID is unknown")
-		return nil, errors.New("payerID is unknown")
+		return nil, valueobject.NewErrorNotFound("payerID is unknown", nil)
 	}
 	payer := &entity.Payer{
 		ID:      payerID,
 		EventID: eventID,
 	}
-	err := u.payers.Create(payer)
-	if err != nil {
-		fmt.Println("ERROR: Failed to create payer:", err)
-		return nil, err
+	if err := u.payers.Create(payer); err != nil {
+		return nil, fmt.Errorf("failed to create payer: %w", err)
 	}
 
 	return payer, nil
