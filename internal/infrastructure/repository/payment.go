@@ -43,7 +43,7 @@ func (r *EventRepository) Create(payment *entity.Payment) error {
 		payment.ID.String(),
 		payment.EventID.String(),
 		payment.PayerID.String(),
-		payment.Amount.Uint64(),
+		payment.Amount.Int64(),
 	)
 	if sqliteErr := new(sqlite3.Error); errors.As(err, sqliteErr) {
 		if sqliteErr.ExtendedCode == sqlite3.ErrConstraintPrimaryKey || sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {

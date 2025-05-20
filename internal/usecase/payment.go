@@ -109,24 +109,63 @@ func (u *PaymentUsecase) Settle(eventID valueobject.EventID) (*Settlement, error
 	if err != nil {
 		return nil, err
 	}
+	if len(payers) <= 0 {
+		return nil, fmt.Errorf("no payers found for eventID: %s", eventID)
+	}
 
 	settlement := &Settlement{
 		Total:        valueobject.Yen(0),
 		Instructions: make([]*SettlementInstruction, 0, len(payers)),
 	}
 
-	payerMap := make(map[valueobject.PayerID]valueobject.Yen)
-
+	debts := make(map[valueobject.PayerID]valueobject.Yen)
 	for _, payment := range payments {
 		settlement.Total += payment.Amount
-		payerMap[payment.PayerID] += payment.Amount
+		debt, err := payment.Amount.CeilDivideBy(len(payers))
+		if err != nil {
+			return nil, fmt.Errorf("failed to divide payment amount: %w", err)
+		}
+		for _, payer := range payers {
+			if payment.PayerID == payer.ID {
+				othersDebt, err := debt.MultiplyBy(len(payers) - 1)
+				if err != nil {
+					return nil, fmt.Errorf("failed to multiply payment amount: %w", err)
+				}
+				debts[payer.ID] -= othersDebt
+				continue
+			}
+			debts[payer.ID] += debt
+		}
 	}
 
-	for from, amount := range payerMap {
-		settlement.Instructions = append(settlement.Instructions, &SettlementInstruction{
-			From:   from,
+	for {
+		var maxDebterID, maxCreditorID valueobject.PayerID
+		var maxDebt, maxCredit valueobject.Yen
+		for payerID, debt := range debts {
+			if debt >= maxDebt {
+				maxDebterID = payerID
+				maxDebt = debt
+			}
+			if debt <= maxCredit {
+				maxCreditorID = payerID
+				maxCredit = debt
+			}
+		}
+		if maxDebt == 0 || maxCredit == 0 {
+			break
+		}
+
+		amount := min(maxDebt, -maxCredit)
+
+		instruction := &SettlementInstruction{
+			From:   maxDebterID,
+			To:     maxCreditorID,
 			Amount: amount,
-		})
+		}
+		settlement.Instructions = append(settlement.Instructions, instruction)
+
+		debts[maxDebterID] -= amount
+		debts[maxCreditorID] += amount
 	}
 
 	return settlement, nil
