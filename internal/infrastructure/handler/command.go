@@ -91,12 +91,15 @@ func (h *SlackCommandHandler) handleWarikanCommand(slash slack.SlashCommand) err
 			return err
 		}
 
-		_, _, err = h.client.PostMessage(slash.ChannelID, buildPaymentCreatedMessage(slash.UserID, amount), slack.MsgOptionMetadata(slack.SlackMetadata{
-			EventType: SlackMetadataEventType,
-			EventPayload: map[string]any{
-				"payment_id": payment.ID.String(),
-			},
-		}))
+		_, _, err = h.client.PostMessage(slash.ChannelID, buildPaymentCreatedMessage(slash.UserID, amount),
+			slack.MsgOptionMetadata(slack.SlackMetadata{
+				EventType: SlackMetadataEventType,
+				EventPayload: map[string]any{
+					"payment_id": payment.ID.String(),
+				},
+			}),
+			botProfiles(),
+		)
 
 		return err
 	}
@@ -104,19 +107,19 @@ func (h *SlackCommandHandler) handleWarikanCommand(slash slack.SlashCommand) err
 	if h.joinPattern.MatchString(slash.Text) {
 		_, err := h.paymentUsecase.Join(eventID, payerID)
 		if e := new(valueobject.ErrorAlreadyExists); errors.As(err, &e) {
-			_, _, err = h.client.PostMessage(slash.ChannelID, buildPayerAlreadyJoinedMessage(slash.UserID))
+			_, _, err = h.client.PostMessage(slash.ChannelID, buildPayerAlreadyJoinedMessage(slash.UserID), botProfiles())
 			return err
 		}
 		if err != nil {
 			return err
 		}
 
-		_, _, err = h.client.PostMessage(slash.ChannelID, buildPayerJoinedMessage(slash.UserID))
+		_, _, err = h.client.PostMessage(slash.ChannelID, buildPayerJoinedMessage(slash.UserID), botProfiles())
 		return err
 	}
 
 	if h.helpPattern.MatchString(slash.Text) {
-		_, _, err := h.client.PostMessage(slash.ChannelID, buildHelpMessage())
+		_, _, err := h.client.PostMessage(slash.ChannelID, buildHelpMessage(), botProfiles())
 		if err != nil {
 			return err
 		}
@@ -124,6 +127,6 @@ func (h *SlackCommandHandler) handleWarikanCommand(slash slack.SlashCommand) err
 		return nil
 	}
 
-	_, _, err := h.client.PostMessage(slash.ChannelID, buildInvalidCommandMessage())
+	_, _, err := h.client.PostMessage(slash.ChannelID, buildInvalidCommandMessage(slash.UserID), botProfiles())
 	return err
 }

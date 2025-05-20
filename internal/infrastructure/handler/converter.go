@@ -22,10 +22,17 @@ func parseYen(text string) (valueobject.Yen, error) {
 	return yen, nil
 }
 
+func botProfiles() slack.MsgOption {
+	return slack.MsgOptionCompose(
+		slack.MsgOptionIconEmoji(":money_with_wings:"),
+		slack.MsgOptionUsername("割り勘"),
+	)
+}
+
 func buildPaymentCreatedMessage(userID string, amount valueobject.Yen) slack.MsgOption {
 	return slack.MsgOptionBlocks(
 		slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s>さんが%s立て替えました！", userID, amount.String()), false, false),
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf(":receipt: <@%s>さんが%s立て替えました！", userID, amount.String()), false, false),
 			nil,
 			nil,
 		),
@@ -33,22 +40,27 @@ func buildPaymentCreatedMessage(userID string, amount valueobject.Yen) slack.Msg
 }
 
 func buildPayerJoinedMessage(userID string) slack.MsgOption {
-	return slack.MsgOptionBlocks(
-		slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s>さんが割り勘に参加します！", userID), false, false),
-			nil,
-			nil,
+	return slack.MsgOptionCompose(
+		slack.MsgOptionBlocks(
+			slack.NewSectionBlock(
+				slack.NewTextBlockObject("mrkdwn", fmt.Sprintf(":purse: <@%s>さんが割り勘に参加します！", userID), false, false),
+				nil,
+				nil,
+			),
 		),
 	)
 }
 
 func buildPayerAlreadyJoinedMessage(userID string) slack.MsgOption {
-	return slack.MsgOptionBlocks(
-		slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s>さんはすでに割り勘に参加してくれています！", userID), false, false),
-			nil,
-			nil,
+	return slack.MsgOptionCompose(
+		slack.MsgOptionBlocks(
+			slack.NewSectionBlock(
+				slack.NewTextBlockObject("mrkdwn", fmt.Sprintf(":warning: <@%s>さんはすでに割り勘に参加しています！", userID), false, false),
+				nil,
+				nil,
+			),
 		),
+		slack.MsgOptionPostEphemeral(userID),
 	)
 }
 
@@ -61,7 +73,7 @@ func buildHelpMessage() slack.MsgOption {
 		),
 		slack.NewDividerBlock(),
 		slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", ":moneybag: *立替え登録*", false, false),
+			slack.NewTextBlockObject("mrkdwn", ":receipt: *立替え登録*", false, false),
 			[]*slack.TextBlockObject{
 				slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan [金額]`", false, false),
 				slack.NewTextBlockObject("mrkdwn", "*取り消す*\n登録メッセージを削除してください", false, false),
@@ -70,7 +82,7 @@ func buildHelpMessage() slack.MsgOption {
 		),
 		slack.NewDividerBlock(),
 		slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", ":money_with_wings: *支払者登録*", false, false),
+			slack.NewTextBlockObject("mrkdwn", ":purse: *支払者登録*", false, false),
 			[]*slack.TextBlockObject{
 				slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan join`", false, false),
 				slack.NewTextBlockObject("mrkdwn", "*取り消す*\n登録メッセージを削除してください", false, false),
@@ -88,12 +100,15 @@ func buildHelpMessage() slack.MsgOption {
 	)
 }
 
-func buildInvalidCommandMessage() slack.MsgOption {
-	return slack.MsgOptionBlocks(
-		slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", "無効なコマンドです。使い方は `/warikan help` をご覧ください！", false, false),
-			nil,
-			nil,
+func buildInvalidCommandMessage(userID string) slack.MsgOption {
+	return slack.MsgOptionCompose(
+		slack.MsgOptionBlocks(
+			slack.NewSectionBlock(
+				slack.NewTextBlockObject("mrkdwn", "無効なコマンドです (´・ω・`)\n使い方は `/warikan help` をご覧ください！", false, false),
+				nil,
+				nil,
+			),
 		),
+		slack.MsgOptionPostEphemeral(userID),
 	)
 }
