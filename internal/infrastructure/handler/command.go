@@ -124,5 +124,6 @@ func (h *SlackCommandHandler) handleWarikanCommand(slash slack.SlashCommand) err
 		return nil
 	}
 
-	return errors.New("Invalid argument")
+	_, _, err := h.client.PostMessage(slash.ChannelID, buildInvalidCommandMessage())
+	return err
 }
