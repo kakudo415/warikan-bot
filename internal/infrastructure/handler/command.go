@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"regexp"
 
@@ -21,6 +22,7 @@ type SlackCommandHandler struct {
 	paymentUsecase *usecase.PaymentUsecase
 	amountPattern  *regexp.Regexp
 	joinPattern    *regexp.Regexp
+	settlePattern  *regexp.Regexp
 	helpPattern    *regexp.Regexp
 }
 
@@ -31,6 +33,7 @@ func NewSlackCommandHandler(token string, signingSecret string, paymentUsecase *
 		paymentUsecase: paymentUsecase,
 		amountPattern:  regexp.MustCompile(`\b((?:\d{1,3}(?:,\d{3})+|\d+))円?\b`),
 		joinPattern:    regexp.MustCompile(`\b(?:(?i:join)|参加|払う|払います)\b`),
+		settlePattern:  regexp.MustCompile(`\b(?:(?i:settle)|集計|集金|合計)\b`),
 		helpPattern:    regexp.MustCompile(`\b(?:(?i:help)|(?i:h)|ヘルプ|使い方)\b`),
 	}
 }
@@ -118,13 +121,22 @@ func (h *SlackCommandHandler) handleWarikanCommand(slash slack.SlashCommand) err
 		return err
 	}
 
-	if h.helpPattern.MatchString(slash.Text) {
-		_, _, err := h.client.PostMessage(slash.ChannelID, buildHelpMessage(), botProfiles())
+	if h.settlePattern.MatchString(slash.Text) {
+		settlement, err := h.paymentUsecase.Settle(eventID)
 		if err != nil {
+			log.Println(err)
 			return err
 		}
+		_, _, err = h.client.PostMessage(slash.ChannelID, buildSettlementMessage(settlement), botProfiles())
+		if err != nil {
+			log.Println(err)
+		}
+		return err
+	}
 
-		return nil
+	if h.helpPattern.MatchString(slash.Text) {
+		_, _, err := h.client.PostMessage(slash.ChannelID, buildHelpMessage(), botProfiles())
+		return err
 	}
 
 	_, _, err := h.client.PostMessage(slash.ChannelID, buildInvalidCommandMessage(slash.UserID), botProfiles())

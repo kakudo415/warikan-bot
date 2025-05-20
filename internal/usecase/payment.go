@@ -24,6 +24,8 @@ func NewPayment(events repository.EventRepository, payers repository.PayerReposi
 
 type Settlement struct {
 	Total        valueobject.Yen
+	PayerAmounts map[valueobject.PayerID]valueobject.Yen
+	PayerIDs     []valueobject.PayerID
 	Instructions []*SettlementInstruction
 }
 
@@ -115,12 +117,20 @@ func (u *PaymentUsecase) Settle(eventID valueobject.EventID) (*Settlement, error
 
 	settlement := &Settlement{
 		Total:        valueobject.Yen(0),
+		PayerAmounts: make(map[valueobject.PayerID]valueobject.Yen),
+		PayerIDs:     make([]valueobject.PayerID, len(payers)),
 		Instructions: make([]*SettlementInstruction, 0, len(payers)),
+	}
+
+	for i, payer := range payers {
+		settlement.PayerIDs[i] = payer.ID
+		settlement.PayerAmounts[payer.ID] = valueobject.Yen(0)
 	}
 
 	debts := make([]valueobject.Yen, len(payers))
 	for _, payment := range payments {
 		settlement.Total += payment.Amount
+		settlement.PayerAmounts[payment.PayerID] += payment.Amount
 		debt, err := payment.Amount.CeilDivideBy(len(payers))
 		if err != nil {
 			return nil, fmt.Errorf("failed to divide payment amount: %w", err)

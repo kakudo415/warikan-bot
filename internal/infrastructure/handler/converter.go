@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kakudo415/warikan-bot/internal/domain/valueobject"
+	"github.com/kakudo415/warikan-bot/internal/usecase"
 	"github.com/slack-go/slack"
 )
 
@@ -40,13 +41,11 @@ func buildPaymentCreatedMessage(userID string, amount valueobject.Yen) slack.Msg
 }
 
 func buildPayerJoinedMessage(userID string) slack.MsgOption {
-	return slack.MsgOptionCompose(
-		slack.MsgOptionBlocks(
-			slack.NewSectionBlock(
-				slack.NewTextBlockObject("mrkdwn", fmt.Sprintf(":purse: <@%s>さんが割り勘に参加します！", userID), false, false),
-				nil,
-				nil,
-			),
+	return slack.MsgOptionBlocks(
+		slack.NewSectionBlock(
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf(":purse: <@%s>さんが割り勘に参加します！", userID), false, false),
+			nil,
+			nil,
 		),
 	)
 }
@@ -62,6 +61,62 @@ func buildPayerAlreadyJoinedMessage(userID string) slack.MsgOption {
 		),
 		slack.MsgOptionPostEphemeral(userID),
 	)
+}
+
+func buildSettlementMessage(settlement *usecase.Settlement) slack.MsgOption {
+	blocks := []slack.Block{
+		slack.NewHeaderBlock(
+			slack.NewTextBlockObject("plain_text", ":moneybag: 集計結果", false, false),
+		),
+		slack.NewDividerBlock(),
+	}
+	payerAmountFields := []*slack.TextBlockObject{}
+	for payerID, amount := range settlement.PayerAmounts {
+		payerAmountFields = append(payerAmountFields,
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s> %s", payerID.String(), amount.String()), false, false),
+		)
+	}
+	payerFields := []*slack.TextBlockObject{}
+	for _, payerID := range settlement.PayerIDs {
+		payerFields = append(payerFields,
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s>", payerID.String()), false, false),
+		)
+	}
+	blocks = append(blocks,
+		slack.NewSectionBlock(
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("合計%sが立て替えられています :receipt:", settlement.Total.String()), false, false),
+			payerAmountFields,
+			nil,
+		),
+		slack.NewDividerBlock(),
+		slack.NewSectionBlock(
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("%d人で割り勘します :purse:", len(settlement.PayerIDs)), false, false),
+			payerFields,
+			nil,
+		),
+		slack.NewDividerBlock(),
+		slack.NewSectionBlock(
+			slack.NewTextBlockObject("mrkdwn", "次のように清算してください :bow:", false, false),
+			nil,
+			nil,
+		),
+	)
+	for _, instruction := range settlement.Instructions {
+		blocks = append(blocks,
+			slack.NewSectionBlock(
+				slack.NewTextBlockObject(
+					"mrkdwn",
+					fmt.Sprintf("<@%s> → %s → <@%s>", instruction.From.String(), instruction.Amount.String(), instruction.To.String()),
+					false,
+					false,
+				),
+				nil,
+				nil,
+				nil,
+			),
+		)
+	}
+	return slack.MsgOptionBlocks(blocks...)
 }
 
 func buildHelpMessage() slack.MsgOption {
@@ -86,6 +141,14 @@ func buildHelpMessage() slack.MsgOption {
 			[]*slack.TextBlockObject{
 				slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan join`", false, false),
 				slack.NewTextBlockObject("mrkdwn", "*取り消す*\n登録メッセージを削除してください", false, false),
+			},
+			nil,
+		),
+		slack.NewDividerBlock(),
+		slack.NewSectionBlock(
+			slack.NewTextBlockObject("mrkdwn", ":moneybag: *清算*", false, false),
+			[]*slack.TextBlockObject{
+				slack.NewTextBlockObject("mrkdwn", "*清算する*\n`/warikan settle`", false, false),
 			},
 			nil,
 		),
