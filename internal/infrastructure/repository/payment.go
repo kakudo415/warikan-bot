@@ -26,7 +26,8 @@ func NewPaymentRepository(filename string) (*EventRepository, error) {
 			id TEXT PRIMARY KEY,
 			event_id TEXT NOT NULL,
 			payer_id TEXT NOT NULL,
-			amount INTEGER NOT NULL
+			amount INTEGER NOT NULL,
+			created_at TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime'))
 		);
 	`)
 	if err != nil {
@@ -59,7 +60,7 @@ func (r *EventRepository) Delete(paymentID valueobject.PaymentID) error {
 }
 
 func (r *EventRepository) FindByEventID(eventID valueobject.EventID) ([]*entity.Payment, error) {
-	rows, err := r.db.Query("SELECT id, event_id, payer_id, amount FROM payments WHERE event_id = ?", eventID.String())
+	rows, err := r.db.Query("SELECT id, event_id, payer_id, amount FROM payments WHERE event_id = ? ORDER BY created_at ASC", eventID.String())
 	if err != nil {
 		return nil, err
 	}
