@@ -153,13 +153,12 @@ func TestSettle(t *testing.T) {
 			expectedSettlement: &Settlement{
 				Total: MustYen(26403),
 				Instructions: []*SettlementInstruction{
-					// FIXME: NOT OPTIMAL (optimal settlement is 4062, ..., 4062, 2031, 643)
-					{From: valueobject.NewPayerID("payer5"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(4063)},
-					{From: valueobject.NewPayerID("payer4"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(4063)},
-					{From: valueobject.NewPayerID("payer3"), To: valueobject.NewPayerID("payer1"), Amount: MustYen(4063)},
-					{From: valueobject.NewPayerID("payer2"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(4063)},
-					{From: valueobject.NewPayerID("payer7"), To: valueobject.NewPayerID("payer1"), Amount: MustYen(1391)},
-					{From: valueobject.NewPayerID("payer7"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(642)},
+					{From: valueobject.NewPayerID("payer7"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(4062)},
+					{From: valueobject.NewPayerID("payer5"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(4062)},
+					{From: valueobject.NewPayerID("payer3"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(4062)},
+					{From: valueobject.NewPayerID("payer2"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(643)},
+					{From: valueobject.NewPayerID("payer4"), To: valueobject.NewPayerID("payer1"), Amount: MustYen(4062)},
+					{From: valueobject.NewPayerID("payer2"), To: valueobject.NewPayerID("payer1"), Amount: MustYen(1388)},
 				},
 			},
 		},

@@ -128,29 +128,59 @@ func (u *PaymentUsecase) Settle(eventID valueobject.EventID) (*Settlement, error
 	for _, payer := range payers {
 		denominator += payer.Weight
 	}
+	numeratorSum := valueobject.Yen(0)
 	for _, payment := range payments {
-		settlement.Total += payment.Amount
-		settlement.AmountsAdvanced[payment.PayerID] += payment.Amount
-
-		paymentOwnerIndex := 0
-		othersDebt := valueobject.Yen(0)
-		for i, payer := range payers {
-			if payer.ID == payment.PayerID {
-				paymentOwnerIndex = i
-				continue
-			}
-			numerator, err := payment.Amount.MultiplyBy(payer.Weight.Int())
-			if err != nil {
-				return nil, fmt.Errorf("failed to multiply payment amount: %w", err)
-			}
-			debt, err := numerator.CeilDivideBy(denominator.Int())
-			if err != nil {
-				return nil, fmt.Errorf("failed to divide payment amount: %w", err)
-			}
-			debts[i] += debt
-			othersDebt += debt
+		numerator, err := payment.Amount.MultiplyBy(100)
+		if err != nil {
+			return nil, fmt.Errorf("failed to multiply payment amount: %w", err)
 		}
-		debts[paymentOwnerIndex] -= othersDebt
+		numeratorSum += numerator
+	}
+	if numeratorSum.Int64()%int64(denominator.Int()) == 0 {
+		// 綺麗に割り切れる場合
+		reimbursement, err := numeratorSum.CeilDivideBy(denominator.Int())
+		if err != nil {
+			return nil, fmt.Errorf("failed to divide payment amount: %w", err)
+		}
+		for i := range payers {
+			debts[i] = reimbursement
+		}
+		for _, payment := range payments {
+			settlement.Total += payment.Amount
+			settlement.AmountsAdvanced[payment.PayerID] += payment.Amount
+
+			for i, payer := range payers {
+				if payer.ID == payment.PayerID {
+					debts[i] -= payment.Amount
+				}
+			}
+		}
+	} else {
+		// 割り切れない場合は、立替者優先で端数を計算する
+		for _, payment := range payments {
+			settlement.Total += payment.Amount
+			settlement.AmountsAdvanced[payment.PayerID] += payment.Amount
+
+			paymentOwnerIndex := 0
+			othersDebt := valueobject.Yen(0)
+			for i, payer := range payers {
+				if payer.ID == payment.PayerID {
+					paymentOwnerIndex = i
+					continue
+				}
+				numerator, err := payment.Amount.MultiplyBy(payer.Weight.Int())
+				if err != nil {
+					return nil, fmt.Errorf("failed to multiply payment amount: %w", err)
+				}
+				debt, err := numerator.CeilDivideBy(denominator.Int())
+				if err != nil {
+					return nil, fmt.Errorf("failed to divide payment amount: %w", err)
+				}
+				debts[i] += debt
+				othersDebt += debt
+			}
+			debts[paymentOwnerIndex] -= othersDebt
+		}
 	}
 
 	for {
