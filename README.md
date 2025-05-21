@@ -1,4 +1,4 @@
-# \@warikan-bot
+# @warikan-bot
 
 Slack上での割り勘を支援するbotです。
 
