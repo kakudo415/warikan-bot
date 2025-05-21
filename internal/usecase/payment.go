@@ -23,10 +23,10 @@ func NewPayment(events repository.EventRepository, payers repository.PayerReposi
 }
 
 type Settlement struct {
-	Total        valueobject.Yen
-	PayerAmounts map[valueobject.PayerID]valueobject.Yen
-	PayerIDs     []valueobject.PayerID
-	Instructions []*SettlementInstruction
+	Total           valueobject.Yen
+	AmountsAdvanced map[valueobject.PayerID]valueobject.Yen
+	Payers          []*entity.Payer
+	Instructions    []*SettlementInstruction
 }
 
 type SettlementInstruction struct {
@@ -116,35 +116,40 @@ func (u *PaymentUsecase) Settle(eventID valueobject.EventID) (*Settlement, error
 	}
 
 	settlement := &Settlement{
-		Total:        valueobject.Yen(0),
-		PayerAmounts: make(map[valueobject.PayerID]valueobject.Yen),
-		PayerIDs:     make([]valueobject.PayerID, len(payers)),
-		Instructions: make([]*SettlementInstruction, 0, len(payers)),
-	}
-
-	for i, payer := range payers {
-		settlement.PayerIDs[i] = payer.ID
+		Total:           valueobject.Yen(0),
+		AmountsAdvanced: make(map[valueobject.PayerID]valueobject.Yen),
+		Payers:          payers,
+		Instructions:    make([]*SettlementInstruction, 0, len(payers)),
 	}
 
 	debts := make([]valueobject.Yen, len(payers))
+	denominator := valueobject.Percent(0)
+	for _, payer := range payers {
+		denominator += payer.Weight
+	}
 	for _, payment := range payments {
 		settlement.Total += payment.Amount
-		settlement.PayerAmounts[payment.PayerID] += payment.Amount
-		debt, err := payment.Amount.CeilDivideBy(len(payers))
-		if err != nil {
-			return nil, fmt.Errorf("failed to divide payment amount: %w", err)
-		}
+		settlement.AmountsAdvanced[payment.PayerID] += payment.Amount
+
+		paymentOwnerIndex := 0
+		othersDebt := valueobject.Yen(0)
 		for i, payer := range payers {
-			if payment.PayerID == payer.ID {
-				othersDebt, err := debt.MultiplyBy(len(payers) - 1)
-				if err != nil {
-					return nil, fmt.Errorf("failed to multiply payment amount: %w", err)
-				}
-				debts[i] -= othersDebt
+			if payer.ID == payment.PayerID {
+				paymentOwnerIndex = i
 				continue
 			}
+			numerator, err := payment.Amount.MultiplyBy(payer.Weight.Int())
+			if err != nil {
+				return nil, fmt.Errorf("failed to multiply payment amount: %w", err)
+			}
+			debt, err := numerator.CeilDivideBy(denominator.Int())
+			if err != nil {
+				return nil, fmt.Errorf("failed to divide payment amount: %w", err)
+			}
 			debts[i] += debt
+			othersDebt += debt
 		}
+		debts[paymentOwnerIndex] -= othersDebt
 	}
 
 	for {

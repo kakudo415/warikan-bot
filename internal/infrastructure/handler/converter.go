@@ -70,15 +70,15 @@ func buildSettlementMessage(settlement *usecase.Settlement) slack.MsgOption {
 		),
 	}
 	payerAmountFields := []*slack.TextBlockObject{}
-	for payerID, amount := range settlement.PayerAmounts {
+	for payerID, amount := range settlement.AmountsAdvanced {
 		payerAmountFields = append(payerAmountFields,
 			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s> %s", payerID.String(), amount.String()), false, false),
 		)
 	}
 	payerFields := []*slack.TextBlockObject{}
-	for _, payerID := range settlement.PayerIDs {
+	for _, payer := range settlement.Payers {
 		payerFields = append(payerFields,
-			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s>", payerID.String()), false, false),
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s>", payer.ID.String()), false, false),
 		)
 	}
 	blocks = append(blocks,
@@ -89,7 +89,7 @@ func buildSettlementMessage(settlement *usecase.Settlement) slack.MsgOption {
 		),
 		slack.NewDividerBlock(),
 		slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf(":purse: %d人で割り勘します", len(settlement.PayerIDs)), false, false),
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf(":purse: %d人で割り勘します", len(settlement.Payers)), false, false),
 			payerFields,
 			nil,
 		),

@@ -55,6 +55,14 @@ func MustYen(amount int) valueobject.Yen {
 	return yen
 }
 
+func MustPercent(value int) valueobject.Percent {
+	percent, err := valueobject.NewPercent(value)
+	if err != nil {
+		panic(err)
+	}
+	return percent
+}
+
 func TestSettle(t *testing.T) {
 	t.Parallel()
 
@@ -69,7 +77,7 @@ func TestSettle(t *testing.T) {
 			name:    "OK: 1 payer, 1 payment",
 			eventID: valueobject.NewEventID("event1"),
 			payers: []*entity.Payer{
-				{ID: valueobject.NewPayerID("payer1"), EventID: valueobject.NewEventID("event1")},
+				{ID: valueobject.NewPayerID("payer1"), EventID: valueobject.NewEventID("event1"), Weight: MustPercent(100)},
 			},
 			payments: []*entity.Payment{
 				{ID: valueobject.NewPaymentID(), EventID: valueobject.NewEventID("event1"), Amount: MustYen(1000)},
@@ -83,8 +91,8 @@ func TestSettle(t *testing.T) {
 			name:    "OK: 2 payers, 1 payment",
 			eventID: valueobject.NewEventID("event2"),
 			payers: []*entity.Payer{
-				{ID: valueobject.NewPayerID("payer1"), EventID: valueobject.NewEventID("event2")},
-				{ID: valueobject.NewPayerID("payer2"), EventID: valueobject.NewEventID("event2")},
+				{ID: valueobject.NewPayerID("payer1"), EventID: valueobject.NewEventID("event2"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer2"), EventID: valueobject.NewEventID("event2"), Weight: MustPercent(100)},
 			},
 			payments: []*entity.Payment{
 				{ID: valueobject.NewPaymentID(), EventID: valueobject.NewEventID("event2"), PayerID: valueobject.NewPayerID("payer1"), Amount: MustYen(1000)},
@@ -100,13 +108,13 @@ func TestSettle(t *testing.T) {
 			name:    "OK: 7 payers, 3 payments",
 			eventID: valueobject.NewEventID("event3"),
 			payers: []*entity.Payer{
-				{ID: valueobject.NewPayerID("payer1"), EventID: valueobject.NewEventID("event3")},
-				{ID: valueobject.NewPayerID("payer2"), EventID: valueobject.NewEventID("event3")},
-				{ID: valueobject.NewPayerID("payer3"), EventID: valueobject.NewEventID("event3")},
-				{ID: valueobject.NewPayerID("payer4"), EventID: valueobject.NewEventID("event3")},
-				{ID: valueobject.NewPayerID("payer5"), EventID: valueobject.NewEventID("event3")},
-				{ID: valueobject.NewPayerID("payer6"), EventID: valueobject.NewEventID("event3")},
-				{ID: valueobject.NewPayerID("payer7"), EventID: valueobject.NewEventID("event3")},
+				{ID: valueobject.NewPayerID("payer1"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer2"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer3"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer4"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer5"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer6"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer7"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
 			},
 			payments: []*entity.Payment{
 				{ID: valueobject.NewPaymentID(), EventID: valueobject.NewEventID("event3"), PayerID: valueobject.NewPayerID("payer6"), Amount: MustYen(16891)},
@@ -122,6 +130,36 @@ func TestSettle(t *testing.T) {
 					{From: valueobject.NewPayerID("payer3"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(3772)},
 					{From: valueobject.NewPayerID("payer2"), To: valueobject.NewPayerID("payer1"), Amount: MustYen(1969)},
 					{From: valueobject.NewPayerID("payer2"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(1803)},
+				},
+			},
+		},
+		{
+			name:    "OK: 7 payers (1 pays half), 3 payments",
+			eventID: valueobject.NewEventID("event3"),
+			payers: []*entity.Payer{
+				{ID: valueobject.NewPayerID("payer1"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer2"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer3"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer4"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer5"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer6"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(100)},
+				{ID: valueobject.NewPayerID("payer7"), EventID: valueobject.NewEventID("event3"), Weight: MustPercent(50)},
+			},
+			payments: []*entity.Payment{
+				{ID: valueobject.NewPaymentID(), EventID: valueobject.NewEventID("event3"), PayerID: valueobject.NewPayerID("payer6"), Amount: MustYen(16891)},
+				{ID: valueobject.NewPaymentID(), EventID: valueobject.NewEventID("event3"), PayerID: valueobject.NewPayerID("payer1"), Amount: MustYen(4332)},
+				{ID: valueobject.NewPaymentID(), EventID: valueobject.NewEventID("event3"), PayerID: valueobject.NewPayerID("payer1"), Amount: MustYen(5180)},
+			},
+			expectedSettlement: &Settlement{
+				Total: MustYen(26403),
+				Instructions: []*SettlementInstruction{
+					// FIXME: NOT OPTIMAL (optimal settlement is 4062, ..., 4062, 2031, 643)
+					{From: valueobject.NewPayerID("payer5"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(4063)},
+					{From: valueobject.NewPayerID("payer4"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(4063)},
+					{From: valueobject.NewPayerID("payer3"), To: valueobject.NewPayerID("payer1"), Amount: MustYen(4063)},
+					{From: valueobject.NewPayerID("payer2"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(4063)},
+					{From: valueobject.NewPayerID("payer7"), To: valueobject.NewPayerID("payer1"), Amount: MustYen(1391)},
+					{From: valueobject.NewPayerID("payer7"), To: valueobject.NewPayerID("payer6"), Amount: MustYen(642)},
 				},
 			},
 		},
