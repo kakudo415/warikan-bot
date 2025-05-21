@@ -15,7 +15,7 @@ type PaymentRepository struct {
 	db *sql.DB
 }
 
-func NewPaymentRepository(filename string) (*EventRepository, error) {
+func NewPaymentRepository(filename string) (*PaymentRepository, error) {
 	db, err := sql.Open("sqlite3", filename)
 	if err != nil {
 		return nil, err
