@@ -34,12 +34,12 @@ func NewPaymentRepository(filename string) (*PaymentRepository, error) {
 		return nil, err
 	}
 
-	return &EventRepository{
+	return &PaymentRepository{
 		db: db,
 	}, nil
 }
 
-func (r *EventRepository) Create(payment *entity.Payment) error {
+func (r *PaymentRepository) Create(payment *entity.Payment) error {
 	_, err := r.db.Exec("INSERT INTO payments (id, event_id, payer_id, amount) VALUES (?, ?, ?, ?)",
 		payment.ID.String(),
 		payment.EventID.String(),
@@ -54,12 +54,12 @@ func (r *EventRepository) Create(payment *entity.Payment) error {
 	return err
 }
 
-func (r *EventRepository) Delete(paymentID valueobject.PaymentID) error {
+func (r *PaymentRepository) Delete(paymentID valueobject.PaymentID) error {
 	_, err := r.db.Exec("DELETE FROM payments WHERE id = ?", paymentID.String())
 	return err
 }
 
-func (r *EventRepository) FindByEventID(eventID valueobject.EventID) ([]*entity.Payment, error) {
+func (r *PaymentRepository) FindByEventID(eventID valueobject.EventID) ([]*entity.Payment, error) {
 	rows, err := r.db.Query("SELECT id, event_id, payer_id, amount FROM payments WHERE event_id = ? ORDER BY created_at ASC", eventID.String())
 	if err != nil {
 		return nil, err
