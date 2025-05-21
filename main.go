@@ -31,5 +31,7 @@ func main() {
 	mux.Handle("/slack/command", slackCommandHandler)
 	mux.Handle("/slack/event", slackEventHandler)
 	log.Println("Starting server on 0.0.0.0:5272")
-	http.ListenAndServe("0.0.0.0:5272", mux) // U+5272 = 割
+	if err := http.ListenAndServe("0.0.0.0:5272", mux); err != nil { // U+5272 = 割
+		log.Fatalf("server failed to start: %v", err)
+	}
 }
