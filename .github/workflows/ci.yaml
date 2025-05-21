@@ -3,6 +3,12 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'main.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/**'
+      - '.github/workflows/ci.yaml'
 jobs:
   test:
     name: Unit Tests
