@@ -77,7 +77,7 @@ func (u *PaymentUsecase) Delete(paymentID valueobject.PaymentID) error {
 	return nil
 }
 
-func (u *PaymentUsecase) Join(eventID valueobject.EventID, payerID valueobject.PayerID) (*entity.Payer, error) {
+func (u *PaymentUsecase) Join(eventID valueobject.EventID, payerID valueobject.PayerID, weight valueobject.Percent) (*entity.Payer, error) {
 	if eventID.IsUnknown() {
 		return nil, valueobject.NewErrorNotFound("eventID is unknown", nil)
 	}
@@ -94,6 +94,7 @@ func (u *PaymentUsecase) Join(eventID valueobject.EventID, payerID valueobject.P
 	payer := &entity.Payer{
 		ID:      payerID,
 		EventID: eventID,
+		Weight:  weight,
 	}
 	if err := u.payers.Create(payer); err != nil {
 		return nil, fmt.Errorf("failed to create payer: %w", err)

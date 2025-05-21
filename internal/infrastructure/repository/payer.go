@@ -24,7 +24,8 @@ func NewPayerRepository(filename string) (*PayerRepository, error) {
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS payers (
 			id TEXT PRIMARY KEY,
-			event_id TEXT NOT NULL
+			event_id TEXT NOT NULL,
+			weight INTEGER NOT NULL
 		);
 	`)
 	if err != nil {
@@ -37,9 +38,10 @@ func NewPayerRepository(filename string) (*PayerRepository, error) {
 }
 
 func (r *PayerRepository) Create(payer *entity.Payer) error {
-	_, err := r.db.Exec("INSERT INTO payers (id, event_id) VALUES (?, ?)",
+	_, err := r.db.Exec("INSERT INTO payers (id, event_id, weight) VALUES (?, ?, ?)",
 		payer.ID.String(),
 		payer.EventID.String(),
+		payer.Weight.Int(),
 	)
 	if sqliteErr := new(sqlite3.Error); errors.As(err, sqliteErr) {
 		if sqliteErr.ExtendedCode == sqlite3.ErrConstraintPrimaryKey || sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
@@ -50,15 +52,16 @@ func (r *PayerRepository) Create(payer *entity.Payer) error {
 }
 
 func (r *PayerRepository) CreateIfNotExists(payer *entity.Payer) error {
-	_, err := r.db.Exec("INSERT OR IGNORE INTO payers (id, event_id) VALUES (?, ?)",
+	_, err := r.db.Exec("INSERT OR IGNORE INTO payers (id, event_id, weight) VALUES (?, ?, ?)",
 		payer.ID.String(),
 		payer.EventID.String(),
+		payer.Weight.Int(),
 	)
 	return err
 }
 
 func (r *PayerRepository) FindByEventID(eventID valueobject.EventID) ([]*entity.Payer, error) {
-	rows, err := r.db.Query("SELECT id, event_id FROM payers WHERE event_id = ?", eventID.String())
+	rows, err := r.db.Query("SELECT id, event_id, weight FROM payers WHERE event_id = ?", eventID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -67,12 +70,17 @@ func (r *PayerRepository) FindByEventID(eventID valueobject.EventID) ([]*entity.
 	var payers []*entity.Payer
 	for rows.Next() {
 		var rawID, rawEventID string
-		var payer entity.Payer
-		if err := rows.Scan(&rawID, &rawEventID); err != nil {
+		var weight int
+		if err := rows.Scan(&rawID, &rawEventID, &weight); err != nil {
 			return nil, err
 		}
+		var payer entity.Payer
 		payer.ID = valueobject.NewPayerID(rawID)
 		payer.EventID = valueobject.NewEventID(rawEventID)
+		payer.Weight, err = valueobject.NewPercent(weight)
+		if err != nil {
+			return nil, err
+		}
 		payers = append(payers, &payer)
 	}
 	return payers, nil
