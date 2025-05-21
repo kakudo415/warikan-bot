@@ -140,7 +140,7 @@ func buildHelpMessage() slack.MsgOption {
 		slack.NewSectionBlock(
 			slack.NewTextBlockObject("mrkdwn", ":receipt: *立替え登録*", false, false),
 			[]*slack.TextBlockObject{
-				slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan [金額]`", false, false),
+				slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan [金額]円`", false, false),
 				slack.NewTextBlockObject("mrkdwn", "*取り消す*\n登録メッセージを削除してください", false, false),
 			},
 			nil,
@@ -149,7 +149,7 @@ func buildHelpMessage() slack.MsgOption {
 		slack.NewSectionBlock(
 			slack.NewTextBlockObject("mrkdwn", ":purse: *支払者登録*", false, false),
 			[]*slack.TextBlockObject{
-				slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan join (<重み%>)`", false, false),
+				slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan join ([重み]%)`", false, false),
 				slack.NewTextBlockObject("mrkdwn", "*取り消す*\n登録メッセージを削除してください", false, false),
 			},
 			nil,
