@@ -11,6 +11,7 @@ type Event struct {
 type Payer struct {
 	ID      valueobject.PayerID
 	EventID valueobject.EventID
+	Weight  valueobject.Percent
 }
 
 type Payment struct {

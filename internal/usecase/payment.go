@@ -23,10 +23,10 @@ func NewPayment(events repository.EventRepository, payers repository.PayerReposi
 }
 
 type Settlement struct {
-	Total        valueobject.Yen
-	PayerAmounts map[valueobject.PayerID]valueobject.Yen
-	PayerIDs     []valueobject.PayerID
-	Instructions []*SettlementInstruction
+	Total           valueobject.Yen
+	AmountsAdvanced map[valueobject.PayerID]valueobject.Yen
+	Payers          []*entity.Payer
+	Instructions    []*SettlementInstruction
 }
 
 type SettlementInstruction struct {
@@ -77,7 +77,7 @@ func (u *PaymentUsecase) Delete(paymentID valueobject.PaymentID) error {
 	return nil
 }
 
-func (u *PaymentUsecase) Join(eventID valueobject.EventID, payerID valueobject.PayerID) (*entity.Payer, error) {
+func (u *PaymentUsecase) Join(eventID valueobject.EventID, payerID valueobject.PayerID, weight valueobject.Percent) (*entity.Payer, error) {
 	if eventID.IsUnknown() {
 		return nil, valueobject.NewErrorNotFound("eventID is unknown", nil)
 	}
@@ -94,6 +94,7 @@ func (u *PaymentUsecase) Join(eventID valueobject.EventID, payerID valueobject.P
 	payer := &entity.Payer{
 		ID:      payerID,
 		EventID: eventID,
+		Weight:  weight,
 	}
 	if err := u.payers.Create(payer); err != nil {
 		return nil, fmt.Errorf("failed to create payer: %w", err)
@@ -116,34 +117,69 @@ func (u *PaymentUsecase) Settle(eventID valueobject.EventID) (*Settlement, error
 	}
 
 	settlement := &Settlement{
-		Total:        valueobject.Yen(0),
-		PayerAmounts: make(map[valueobject.PayerID]valueobject.Yen),
-		PayerIDs:     make([]valueobject.PayerID, len(payers)),
-		Instructions: make([]*SettlementInstruction, 0, len(payers)),
-	}
-
-	for i, payer := range payers {
-		settlement.PayerIDs[i] = payer.ID
+		Total:           valueobject.Yen(0),
+		AmountsAdvanced: make(map[valueobject.PayerID]valueobject.Yen),
+		Payers:          payers,
+		Instructions:    make([]*SettlementInstruction, 0, len(payers)),
 	}
 
 	debts := make([]valueobject.Yen, len(payers))
+	denominator := valueobject.Percent(0)
+	for _, payer := range payers {
+		denominator += payer.Weight
+	}
+	numeratorSum := valueobject.Yen(0)
 	for _, payment := range payments {
-		settlement.Total += payment.Amount
-		settlement.PayerAmounts[payment.PayerID] += payment.Amount
-		debt, err := payment.Amount.CeilDivideBy(len(payers))
+		numerator, err := payment.Amount.MultiplyBy(100)
+		if err != nil {
+			return nil, fmt.Errorf("failed to multiply payment amount: %w", err)
+		}
+		numeratorSum += numerator
+	}
+	if numeratorSum.Int64()%int64(denominator.Int()) == 0 {
+		// 綺麗に割り切れる場合
+		reimbursement, err := numeratorSum.CeilDivideBy(denominator.Int())
 		if err != nil {
 			return nil, fmt.Errorf("failed to divide payment amount: %w", err)
 		}
-		for i, payer := range payers {
-			if payment.PayerID == payer.ID {
-				othersDebt, err := debt.MultiplyBy(len(payers) - 1)
+		for i := range payers {
+			debts[i] = reimbursement
+		}
+		for _, payment := range payments {
+			settlement.Total += payment.Amount
+			settlement.AmountsAdvanced[payment.PayerID] += payment.Amount
+
+			for i, payer := range payers {
+				if payer.ID == payment.PayerID {
+					debts[i] -= payment.Amount
+				}
+			}
+		}
+	} else {
+		// 割り切れない場合は、立替者優先で端数を計算する
+		for _, payment := range payments {
+			settlement.Total += payment.Amount
+			settlement.AmountsAdvanced[payment.PayerID] += payment.Amount
+
+			paymentOwnerIndex := 0
+			othersDebt := valueobject.Yen(0)
+			for i, payer := range payers {
+				if payer.ID == payment.PayerID {
+					paymentOwnerIndex = i
+					continue
+				}
+				numerator, err := payment.Amount.MultiplyBy(payer.Weight.Int())
 				if err != nil {
 					return nil, fmt.Errorf("failed to multiply payment amount: %w", err)
 				}
-				debts[i] -= othersDebt
-				continue
+				debt, err := numerator.CeilDivideBy(denominator.Int())
+				if err != nil {
+					return nil, fmt.Errorf("failed to divide payment amount: %w", err)
+				}
+				debts[i] += debt
+				othersDebt += debt
 			}
-			debts[i] += debt
+			debts[paymentOwnerIndex] -= othersDebt
 		}
 	}
 

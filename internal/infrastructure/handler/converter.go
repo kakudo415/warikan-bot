@@ -23,6 +23,18 @@ func parseYen(text string) (valueobject.Yen, error) {
 	return yen, nil
 }
 
+func parsePercent(text string) (valueobject.Percent, error) {
+	percent, err := strconv.Atoi(text)
+	if err != nil {
+		return valueobject.Percent(0), fmt.Errorf("failed to parse percent: %w", err)
+	}
+	percentValue, err := valueobject.NewPercent(percent)
+	if err != nil {
+		return valueobject.Percent(0), err
+	}
+	return percentValue, nil
+}
+
 func botProfiles() slack.MsgOption {
 	return slack.MsgOptionCompose(
 		slack.MsgOptionIconEmoji(":money_with_wings:"),
@@ -70,15 +82,15 @@ func buildSettlementMessage(settlement *usecase.Settlement) slack.MsgOption {
 		),
 	}
 	payerAmountFields := []*slack.TextBlockObject{}
-	for payerID, amount := range settlement.PayerAmounts {
+	for payerID, amount := range settlement.AmountsAdvanced {
 		payerAmountFields = append(payerAmountFields,
 			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s> %s", payerID.String(), amount.String()), false, false),
 		)
 	}
 	payerFields := []*slack.TextBlockObject{}
-	for _, payerID := range settlement.PayerIDs {
+	for _, payer := range settlement.Payers {
 		payerFields = append(payerFields,
-			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s>", payerID.String()), false, false),
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<@%s> %d%%", payer.ID.String(), payer.Weight.Int()), false, false),
 		)
 	}
 	blocks = append(blocks,
@@ -89,7 +101,7 @@ func buildSettlementMessage(settlement *usecase.Settlement) slack.MsgOption {
 		),
 		slack.NewDividerBlock(),
 		slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf(":purse: %d人で割り勘します", len(settlement.PayerIDs)), false, false),
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf(":purse: %d人で割り勘します", len(settlement.Payers)), false, false),
 			payerFields,
 			nil,
 		),
@@ -128,7 +140,7 @@ func buildHelpMessage() slack.MsgOption {
 		slack.NewSectionBlock(
 			slack.NewTextBlockObject("mrkdwn", ":receipt: *立替え登録*", false, false),
 			[]*slack.TextBlockObject{
-				slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan [金額]`", false, false),
+				slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan [金額]円`", false, false),
 				slack.NewTextBlockObject("mrkdwn", "*取り消す*\n登録メッセージを削除してください", false, false),
 			},
 			nil,
@@ -137,7 +149,7 @@ func buildHelpMessage() slack.MsgOption {
 		slack.NewSectionBlock(
 			slack.NewTextBlockObject("mrkdwn", ":purse: *支払者登録*", false, false),
 			[]*slack.TextBlockObject{
-				slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan join`", false, false),
+				slack.NewTextBlockObject("mrkdwn", "*登録する*\n`/warikan join ([重み]%)`", false, false),
 				slack.NewTextBlockObject("mrkdwn", "*取り消す*\n登録メッセージを削除してください", false, false),
 			},
 			nil,

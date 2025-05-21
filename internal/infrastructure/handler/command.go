@@ -22,6 +22,7 @@ type SlackCommandHandler struct {
 	paymentUsecase *usecase.PaymentUsecase
 	amountPattern  *regexp.Regexp
 	joinPattern    *regexp.Regexp
+	percentPattern *regexp.Regexp
 	settlePattern  *regexp.Regexp
 	helpPattern    *regexp.Regexp
 }
@@ -33,6 +34,7 @@ func NewSlackCommandHandler(token string, signingSecret string, paymentUsecase *
 		paymentUsecase: paymentUsecase,
 		amountPattern:  regexp.MustCompile(`\b((?:\d{1,3}(?:,\d{3})+|\d+))円?\b`),
 		joinPattern:    regexp.MustCompile(`\b(?:(?i:join)|参加|払う|払います)\b`),
+		percentPattern: regexp.MustCompile(`\b(\d+)(?:%)?\b`),
 		settlePattern:  regexp.MustCompile(`\b(?:(?i:settle)|集計|集金|合計)\b`),
 		helpPattern:    regexp.MustCompile(`\b(?:(?i:help)|(?i:h)|ヘルプ|使い方)\b`),
 	}
@@ -82,6 +84,29 @@ func (h *SlackCommandHandler) handleWarikanCommand(slash slack.SlashCommand) err
 	eventID := valueobject.NewEventID(slash.ChannelID)
 	payerID := valueobject.NewPayerID(slash.UserID)
 
+	if h.joinPattern.MatchString(slash.Text) {
+		weight := valueobject.Percent(100)
+		percentMatch := h.percentPattern.FindStringSubmatch(slash.Text)
+		if percentMatch != nil {
+			w, err := parsePercent(percentMatch[1])
+			if err != nil {
+				return err
+			}
+			weight = w
+		}
+		_, err := h.paymentUsecase.Join(eventID, payerID, weight)
+		if e := new(valueobject.ErrorAlreadyExists); errors.As(err, &e) {
+			_, _, err = h.client.PostMessage(slash.ChannelID, buildPayerAlreadyJoinedMessage(slash.UserID), botProfiles())
+			return err
+		}
+		if err != nil {
+			return err
+		}
+
+		_, _, err = h.client.PostMessage(slash.ChannelID, buildPayerJoinedMessage(slash.UserID), botProfiles())
+		return err
+	}
+
 	match := h.amountPattern.FindStringSubmatch(slash.Text)
 	if match != nil {
 		amount, err := parseYen(match[1])
@@ -104,20 +129,6 @@ func (h *SlackCommandHandler) handleWarikanCommand(slash slack.SlashCommand) err
 			botProfiles(),
 		)
 
-		return err
-	}
-
-	if h.joinPattern.MatchString(slash.Text) {
-		_, err := h.paymentUsecase.Join(eventID, payerID)
-		if e := new(valueobject.ErrorAlreadyExists); errors.As(err, &e) {
-			_, _, err = h.client.PostMessage(slash.ChannelID, buildPayerAlreadyJoinedMessage(slash.UserID), botProfiles())
-			return err
-		}
-		if err != nil {
-			return err
-		}
-
-		_, _, err = h.client.PostMessage(slash.ChannelID, buildPayerJoinedMessage(slash.UserID), botProfiles())
 		return err
 	}
 
